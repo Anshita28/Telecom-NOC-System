@@ -1,0 +1,130 @@
+{
+  "random_forest": {
+    "accuracy": 0.6926201760324983,
+    "precision_macro": 0.625968386990431,
+    "recall_macro": 0.7321351445489377,
+    "f1_macro": 0.6510969171124287,
+    "f1_weighted": 0.7076964977324165,
+    "confusion_matrix": [
+      [
+        646,
+        222,
+        89
+      ],
+      [
+        67,
+        255,
+        53
+      ],
+      [
+        1,
+        22,
+        122
+      ]
+    ]
+  },
+  "xgboost": {
+    "accuracy": 0.7271496276235613,
+    "precision_macro": 0.6615750250894056,
+    "recall_macro": 0.7560571229536747,
+    "f1_macro": 0.6898126367880777,
+    "f1_weighted": 0.7387972932793376,
+    "confusion_matrix": [
+      [
+        683,
+        213,
+        61
+      ],
+      [
+        61,
+        270,
+        44
+      ],
+      [
+        8,
+        16,
+        121
+      ]
+    ]
+  },
+  "svm": {
+    "accuracy": 0.5727826675693974,
+    "precision_macro": 0.5115403406811091,
+    "recall_macro": 0.6143587600139324,
+    "f1_macro": 0.5176042791236406,
+    "f1_weighted": 0.5965550539490354,
+    "confusion_matrix": [
+      [
+        565,
+        241,
+        151
+      ],
+      [
+        105,
+        162,
+        108
+      ],
+      [
+        3,
+        23,
+        119
+      ]
+    ]
+  },
+  "lstm": {
+    "accuracy": 0.5572105619498985,
+    "precision_macro": 0.5046441573288822,
+    "recall_macro": 0.591919191919192,
+    "f1_macro": 0.5065969915375682,
+    "f1_weighted": 0.584478495918396,
+    "confusion_matrix": [
+      [
+        540,
+        291,
+        126
+      ],
+      [
+        87,
+        175,
+        113
+      ],
+      [
+        10,
+        27,
+        108
+      ]
+    ]
+  },
+  "gru": {
+    "accuracy": 0.5781990521327014,
+    "precision_macro": 0.5059907554729509,
+    "recall_macro": 0.5813779171020551,
+    "f1_macro": 0.5132416400164647,
+    "f1_weighted": 0.6039010614713114,
+    "confusion_matrix": [
+      [
+        587,
+        263,
+        107
+      ],
+      [
+        97,
+        168,
+        110
+      ],
+      [
+        12,
+        34,
+        99
+      ]
+    ]
+  },
+  "autoencoder": {
+    "roc_auc": 0.6376699043661133,
+    "pr_auc": 0.4767797926837861,
+    "anomaly_threshold": 1.3836005926132202,
+    "task": "unsupervised_anomaly_early_warning"
+  },
+  "primary_classifier": "xgboost",
+  "ensemble_note": "Ticket severity uses a F1-weighted soft ensemble of RF, XGBoost, SVM, LSTM, and GRU. The autoencoder is unsupervised early-warning (reconstruction MSE on severity-0 tickets)."
+}

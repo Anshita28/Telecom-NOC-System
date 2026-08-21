@@ -1,0 +1,12 @@
+{
+    "input_dim": 455,
+    "bottleneck_dim": 16,
+    "anomaly_threshold": 1.3836005926132202,
+    "percentile_used": 95.0,
+    "epochs": 28,
+    "final_train_loss": 0.3244967715669183,
+    "val_mean_mse": 0.4519977867603302,
+    "roc_auc": 0.6376699043661133,
+    "pr_auc": 0.4767797926837861,
+    "total_evaluated_samples": 7381
+}

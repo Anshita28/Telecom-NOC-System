@@ -1,0 +1,7 @@
+INFO:     Started server process [4832]
+INFO:     Waiting for application startup.
+INFO:noc-backend:Initializing database...
+INFO:noc-backend:Loading TelecomRiskEngine (one-time)...
+INFO:noc-backend:Backend ready — engine loaded, DB initialized.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

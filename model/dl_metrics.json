@@ -1,0 +1,52 @@
+{
+  "lstm": {
+    "accuracy": 0.5572105619498985,
+    "precision_macro": 0.5046441573288822,
+    "recall_macro": 0.591919191919192,
+    "f1_macro": 0.5065969915375682,
+    "f1_weighted": 0.584478495918396,
+    "confusion_matrix": [
+      [
+        540,
+        291,
+        126
+      ],
+      [
+        87,
+        175,
+        113
+      ],
+      [
+        10,
+        27,
+        108
+      ]
+    ],
+    "classification_report": "              precision    recall  f1-score   support\n\n      0: Low       0.85      0.56      0.68       957\n   1: Medium       0.35      0.47      0.40       375\n   2: Severe       0.31      0.74      0.44       145\n\n    accuracy                           0.56      1477\n   macro avg       0.50      0.59      0.51      1477\nweighted avg       0.67      0.56      0.58      1477\n"
+  },
+  "gru": {
+    "accuracy": 0.5781990521327014,
+    "precision_macro": 0.5059907554729509,
+    "recall_macro": 0.5813779171020551,
+    "f1_macro": 0.5132416400164647,
+    "f1_weighted": 0.6039010614713114,
+    "confusion_matrix": [
+      [
+        587,
+        263,
+        107
+      ],
+      [
+        97,
+        168,
+        110
+      ],
+      [
+        12,
+        34,
+        99
+      ]
+    ],
+    "classification_report": "              precision    recall  f1-score   support\n\n      0: Low       0.84      0.61      0.71       957\n   1: Medium       0.36      0.45      0.40       375\n   2: Severe       0.31      0.68      0.43       145\n\n    accuracy                           0.58      1477\n   macro avg       0.51      0.58      0.51      1477\nweighted avg       0.67      0.58      0.60      1477\n"
+  }
+}
