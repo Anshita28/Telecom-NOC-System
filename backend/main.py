@@ -156,6 +156,15 @@ class AIChatRequest(BaseModel):
     api_key: Optional[str] = None
 
 
+class CustomPredictionRequest(BaseModel):
+    target_id: int = Field(ge=1, le=9_999_999)
+    entity_type: int = Field(default=1, ge=1, le=54)
+    severity_type: int = Field(default=1, ge=1, le=5)
+    event_burst: int = Field(default=3, ge=1, le=24)
+    resource_count: int = Field(default=2, ge=1, le=10)
+    log_volume: int = Field(default=100, ge=1, le=20_000)
+
+
 # ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
@@ -301,6 +310,21 @@ async def analyze_ticket(ticket_id: int):
         urgency=summary["urgency"],
     )
 
+    return summary
+
+
+@app.post("/api/custom-prediction")
+async def analyze_custom_ticket(req: CustomPredictionRequest):
+    if not risk_engine:
+        raise HTTPException(status_code=503, detail="Engine not loaded yet.")
+    summary = risk_engine.analyze_custom_ticket(**req.model_dump())
+    log_prediction(
+        ticket_id=summary["ticket_id"], location=summary["location"],
+        pred_severity=summary["predicted_severity"], pred_label=summary["predicted_severity_label"],
+        confidence=summary["confidence"], anomaly_mse=summary["anomaly_mse"],
+        threshold=summary["threshold"], anomaly_status=summary["anomaly_status"],
+        combined_risk=summary["combined_risk"], risk_category=summary["risk_category"], urgency=summary["urgency"],
+    )
     return summary
 
 

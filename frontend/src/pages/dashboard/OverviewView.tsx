@@ -34,6 +34,7 @@ import {
   fetchAuditLogs,
 } from "@/lib/api";
 import type { PredictionHistoryItem, AuditLogItem } from "@/lib/api";
+import type { AnalyticsOverview } from "@/lib/api";
 
 const stagger = {
   hidden: {},
@@ -123,8 +124,19 @@ export default function OverviewView() {
   if (overviewLoading) return <OverviewSkeleton />;
 
   const sc = overview?.severity_counts ?? { 0: 0, 1: 0, 2: 0 };
-  const ml = overview?.ml_metrics ?? {};
-  const ae = overview?.ae_metadata ?? {};
+  const ml: AnalyticsOverview["ml_metrics"] = overview?.ml_metrics ?? {
+    accuracy: 0,
+    precision_macro: 0,
+    recall_macro: 0,
+    f1_macro: 0,
+  };
+  const ae: AnalyticsOverview["ae_metadata"] = overview?.ae_metadata ?? {
+    input_dim: 0,
+    bottleneck_dim: 0,
+    roc_auc: 0,
+    pr_auc: 0,
+    anomaly_threshold: 0,
+  };
 
   const predictions: PredictionHistoryItem[] = predData?.predictions ?? [];
   const audits: AuditLogItem[] = auditData?.audit_logs ?? [];

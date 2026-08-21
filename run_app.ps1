@@ -4,36 +4,35 @@ Write-Host "============================================================" -Foreg
 Write-Host "📡 Starting Telecom Fault Prediction & Anomaly NOC System" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Cyan
 
-# Check Python installation
-$pythonPath = Get-Command python -ErrorAction SilentlyContinue
-if (-not $pythonPath) {
-    Write-Host "Error: Python is not installed or not in PATH." -ForegroundColor Red
+# Use the project virtual environment so launch behavior does not depend on a
+# broken or differently configured global Python installation.
+$projectPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path $projectPython)) {
+    Write-Host "Error: Project virtual environment is missing. Recreate .venv first." -ForegroundColor Red
     exit 1
 }
 
-Write-Host "Installing Backend Dependencies..." -ForegroundColor Yellow
-python -m pip install -r requirements.txt
-
-Write-Host "Installing Frontend Dependencies..." -ForegroundColor Yellow
-Push-Location frontend
-npm install
-Pop-Location
+$frontendVite = Join-Path $PSScriptRoot "frontend\node_modules\vite\bin\vite.js"
+if (-not (Test-Path $frontendVite)) {
+    Write-Host "Error: Frontend dependencies are missing. Install them with a working npm installation." -ForegroundColor Red
+    exit 1
+}
 
 # Ensure real dataset zip files are unpacked
 if (-not (Test-Path "data\train.csv")) {
     Write-Host "Unpacking real dataset zip files..." -ForegroundColor Yellow
-    python data\generate_dataset.py
+    & $projectPython data\generate_dataset.py
 }
 
 # Train all six models if the new artifacts are missing
 if (-not (Test-Path "model\rf_model.pkl") -or -not (Test-Path "model\lstm_model.pt")) {
     Write-Host "Training RF, XGBoost, SVM, LSTM, GRU, Autoencoder on Telstra data..." -ForegroundColor Yellow
-    python -m model.train_all
+    & $projectPython -m model.train_all
 }
 
 # Launch Backend and Frontend
 Write-Host "Launching Backend (FastAPI)..." -ForegroundColor Green
-Start-Process cmd -ArgumentList "/k", "python -m backend.run"
+Start-Process cmd -ArgumentList "/k", ".venv\Scripts\python.exe -m backend.run"
 
 Write-Host "Launching Frontend (React)..." -ForegroundColor Green
-Start-Process cmd -ArgumentList "/k", "cd frontend && npm run dev"
+Start-Process cmd -ArgumentList "/k", "cd frontend && node node_modules\vite\bin\vite.js"

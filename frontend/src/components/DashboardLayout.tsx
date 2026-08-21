@@ -9,6 +9,7 @@ import {
   ChevronRight,
   X,
   Cpu,
+  Crosshair,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ const navItems = [
   { path: "/dashboard", label: "Analytics Overview", icon: LayoutDashboard },
   { path: "/dashboard/analysis", label: "Ticket Analysis", icon: Search },
   { path: "/dashboard/models", label: "Model Zoo", icon: Cpu },
+  { path: "/dashboard/predict", label: "Predict Fault", icon: Crosshair },
 ];
 
 export default function DashboardLayout({ children, settingsSlot }: DashboardLayoutProps) {

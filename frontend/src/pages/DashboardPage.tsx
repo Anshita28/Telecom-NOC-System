@@ -4,6 +4,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import OverviewView from "@/pages/dashboard/OverviewView";
 import AnalysisView from "@/pages/dashboard/AnalysisView";
 import ModelsView from "@/pages/dashboard/ModelsView";
+import CustomPredictionView from "@/pages/dashboard/CustomPredictionView";
 
 export default function DashboardPage() {
   const [apiKey, setApiKey] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export default function DashboardPage() {
         <Route index element={<OverviewView />} />
         <Route path="analysis" element={<AnalysisView apiKey={apiKey} />} />
         <Route path="models" element={<ModelsView />} />
+        <Route path="predict" element={<CustomPredictionView />} />
       </Routes>
     </DashboardLayout>
   );

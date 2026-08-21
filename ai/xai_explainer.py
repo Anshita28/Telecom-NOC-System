@@ -286,3 +286,134 @@ class TelecomRiskEngine:
             "ensemble_weights": self.ensemble_weights,
             "probable_root_causes": root_candidates,
         }
+
+    def analyze_custom_ticket(
+        self,
+        target_id: int,
+        entity_type: int,
+        severity_type: int,
+        event_burst: int,
+        resource_count: int,
+        log_volume: int,
+    ) -> dict:
+        """Run a transparent what-if prediction from operator-entered signals.
+
+        Telstra tickets contain sparse categorical features. For a manual prediction,
+        the selected entity is encoded as one event type and the requested counts are
+        spread deterministically across known resource/log features. This keeps the
+        input inside the model's real feature schema while clearly marking the result
+        as a simulated scenario rather than a historical ticket.
+        """
+        event_cols = [c for c in self.feature_cols if c.startswith("evt_")]
+        resource_cols = [c for c in self.feature_cols if c.startswith("res_")]
+        severity_cols = [c for c in self.feature_cols if c.startswith("sev_")]
+        log_cols = [c for c in self.feature_cols if c.startswith("log_")]
+        if not event_cols or not resource_cols or not log_cols:
+            raise RuntimeError("Model feature schema is incomplete for custom prediction.")
+
+        x_df = pd.DataFrame(0.0, index=[0], columns=self.feature_cols)
+        location_code = int(target_id) % max(1, int(self.seq_meta["n_locations"]))
+        if "location_code" in x_df.columns:
+            x_df.loc[0, "location_code"] = location_code
+        selected_event = event_cols[(int(entity_type) - 1) % len(event_cols)]
+        x_df.loc[0, selected_event] = float(event_burst)
+        for offset in range(min(int(resource_count), len(resource_cols))):
+            x_df.loc[0, resource_cols[(int(entity_type) - 1 + offset) % len(resource_cols)]] = 1.0
+        if severity_cols:
+            x_df.loc[0, severity_cols[(int(severity_type) - 1) % len(severity_cols)]] = 1.0
+        log_slots = max(1, min(int(event_burst), len(log_cols)))
+        base_volume, remainder = divmod(int(log_volume), log_slots)
+        for offset in range(log_slots):
+            x_df.loc[0, log_cols[(int(entity_type) - 1 + offset) % len(log_cols)]] = float(
+                base_volume + (1 if offset < remainder else 0)
+            )
+        # These aggregate columns exist in the dashboard master frame but are
+        # deliberately not part of the persisted model schema in current model
+        # artifacts. Add them only when a future retrained schema contains them.
+        for name, value in (("n_events", event_burst), ("n_resources", resource_count), ("log_volume_total", log_volume)):
+            if name in x_df.columns:
+                x_df.loc[0, name] = float(value)
+
+        proba = {
+            "random_forest": self._tabular_proba(x_df, "random_forest"),
+            "xgboost": self._tabular_proba(x_df, "xgboost"),
+            "svm": self._tabular_proba(x_df, "svm"),
+        }
+        seq_len = int(self.seq_meta["seq_len"])
+        vocab_size = max(2, int(self.seq_meta["vocab_size"]))
+        feat_ids = torch.zeros((1, seq_len), dtype=torch.long)
+        volumes = torch.zeros((1, seq_len), dtype=torch.float32)
+        for index in range(min(int(event_burst), seq_len)):
+            feat_ids[0, index] = ((int(entity_type) - 1 + index) % (vocab_size - 1)) + 1
+            volumes[0, index] = np.log1p(max(1.0, log_volume / max(1, event_burst)))
+        loc = torch.tensor([location_code], dtype=torch.long)
+        with torch.no_grad():
+            proba["lstm"] = torch.softmax(self.lstm(feat_ids, volumes, loc), dim=1).numpy()[0]
+            proba["gru"] = torch.softmax(self.gru(feat_ids, volumes, loc), dim=1).numpy()[0]
+
+        ensemble = sum(self.ensemble_weights[name] * prediction for name, prediction in proba.items())
+        ensemble = ensemble / ensemble.sum()
+        pred_sev = int(np.argmax(ensemble))
+        prob_fault = float(ensemble[1] + ensemble[2])
+        seq_fault = float(0.5 * (proba["lstm"][1] + proba["lstm"][2] + proba["gru"][1] + proba["gru"][2]))
+
+        x_vec = x_df.to_numpy(dtype=np.float32)
+        x_scaled = self.scaler.transform(x_vec)
+        with torch.no_grad():
+            recon = self.autoencoder(torch.tensor(x_scaled, dtype=torch.float32))
+            mse = float(torch.mean((torch.tensor(x_scaled, dtype=torch.float32) - recon) ** 2).item())
+        anomaly_risk_score = min(1.0, mse / self.threshold) if self.threshold > 0 else 0.0
+        combined_risk = 0.50 * prob_fault + 0.25 * anomaly_risk_score + 0.25 * seq_fault
+        is_anomalous = mse > self.threshold
+        if combined_risk >= 0.70:
+            risk_category, urgency = "CRITICAL", "P1 - CRITICAL URGENCY"
+        elif combined_risk >= 0.55 or prob_fault >= 0.50:
+            risk_category, urgency = "HIGH", "P2 - HIGH PRIORITY"
+        elif combined_risk >= 0.35 or is_anomalous:
+            risk_category, urgency = "ELEVATED", "P3 - ATTENTION"
+        else:
+            risk_category, urgency = "LOW", "P4 - ROUTINE"
+
+        attributions = []
+        for index, column in enumerate(self.feature_cols):
+            value = float(x_df.loc[0, column])
+            if value > 0:
+                attributions.append({
+                    "feature": column,
+                    "clean_feature": column.replace("evt_", "Entity: ").replace("res_", "Resource: ").replace("sev_", "Severity: ").replace("log_", "Log: "),
+                    "value": value,
+                    "importance": float(self.importances[index]),
+                    "attribution_score": value * float(self.importances[index]),
+                })
+        attributions.sort(key=lambda item: item["attribution_score"], reverse=True)
+        model_predictions = {
+            name: {
+                "predicted_severity": int(np.argmax(prediction)),
+                "predicted_severity_label": SEVERITY_LABELS[int(np.argmax(prediction))],
+                "confidence": float(np.max(prediction)),
+                "prob_sev_0": float(prediction[0]),
+                "prob_sev_1": float(prediction[1]),
+                "prob_sev_2": float(prediction[2]),
+                "weight": self.ensemble_weights[name],
+            }
+            for name, prediction in proba.items()
+        }
+        return {
+            "ticket_id": int(target_id), "location": f"Simulated node {target_id}", "actual_severity": None,
+            "predicted_severity": pred_sev, "predicted_severity_label": SEVERITY_LABELS[pred_sev],
+            "confidence": float(ensemble[pred_sev]), "prob_sev_0": float(ensemble[0]),
+            "prob_sev_1": float(ensemble[1]), "prob_sev_2": float(ensemble[2]), "prob_fault": prob_fault,
+            "seq_fault": seq_fault, "anomaly_mse": mse, "threshold": self.threshold,
+            "is_anomalous": is_anomalous,
+            "anomaly_status": "Anomalous Network Activity" if is_anomalous else "Normal Network Pattern",
+            "anomaly_risk_score": anomaly_risk_score, "combined_risk": combined_risk,
+            "risk_category": risk_category, "urgency": urgency, "early_warning": bool(is_anomalous or prob_fault >= 0.55),
+            "active_events": [selected_event.replace("evt_", "")],
+            "active_resources": [column.replace("res_", "") for column in resource_cols[:min(resource_count, len(resource_cols))]],
+            "active_severities": [severity_cols[(severity_type - 1) % len(severity_cols)].replace("sev_", "")] if severity_cols else [],
+            "active_logs": {f"synthetic log burst {entity_type}": int(log_volume)},
+            "top_attributions": attributions[:10], "model_predictions": model_predictions,
+            "ensemble_weights": self.ensemble_weights,
+            "probable_root_causes": [f"Simulated entity signature: {selected_event.replace('evt_', '')}", f"Operator-entered log volume: {log_volume}", f"Operator-entered resource count: {resource_count}"],
+            "scenario_mode": True,
+        }

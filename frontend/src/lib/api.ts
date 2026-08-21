@@ -117,6 +117,16 @@ export interface TicketAnalysis {
   model_predictions?: Record<string, ModelPrediction>;
   ensemble_weights?: Record<string, number>;
   probable_root_causes?: string[];
+  scenario_mode?: boolean;
+}
+
+export interface CustomPredictionInput {
+  target_id: number;
+  entity_type: number;
+  severity_type: number;
+  event_burst: number;
+  resource_count: number;
+  log_volume: number;
 }
 
 export interface ModelPrediction {
@@ -263,6 +273,13 @@ export async function fetchAuditLogs(limit = 50): Promise<{ audit_logs: AuditLog
 
 export async function analyzeTicket(ticketId: number): Promise<TicketAnalysis> {
   return apiFetch<TicketAnalysis>(`/api/analyze/${ticketId}`, { method: "POST" });
+}
+
+export async function analyzeCustomPrediction(input: CustomPredictionInput): Promise<TicketAnalysis> {
+  return apiFetch<TicketAnalysis>("/api/custom-prediction", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function requestRootCause(
