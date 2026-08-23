@@ -1,173 +1,207 @@
-# Telecom Network Fault Prediction and Predictive Maintenance System
+ # Telecom NOC AI — Fault Prediction & Predictive Maintenance System
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange.svg)](https://pytorch.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-ff4b4b.svg)](https://streamlit.io/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18%2B-61DAFB.svg)](https://react.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An AI-powered academic web application and machine learning framework designed for Network Operations Centers (NOC). The system analyzes real telecom network event logs from the **Telstra Recruiting Network Disruptions Dataset**, predicts fault severity risk, detects statistical telemetry anomalies using PyTorch Autoencoders, fuses predictions into a single operational risk score, provides XAI feature attributions, generates evidence-grounded root-cause hypotheses, and recommends preventive maintenance actions for network engineers.
+An AI-powered Network Operations Center (NOC) decision-support platform built on the real **Telstra Recruiting Network Disruptions Dataset** (Kaggle). It predicts fault-severity risk with a 5-model ensemble, detects telemetry anomalies with a PyTorch autoencoder, fuses every signal into one operational risk score, explains its predictions via feature attribution, and generates evidence-grounded root-cause hypotheses and preventive recommendations through a Gemini-powered (or fully offline) NOC copilot.
+
+Built for the **Cognizant Nurture Partner Network (NPN) 2027 — AI & Analytics Hackathon**, Use Case 14: *Telecom Network Fault Prediction & Predictive Maintenance*.
+
+Team 9 · KIET Group of Institutions · CSE (AI/ML)
 
 ---
 
 ## 📌 Problem Statement
 
-Modern telecommunication networks generate massive volumes of event tickets, alarm logs, and resource alerts. NOC engineers face significant challenges in triaging tickets, identifying severe fault risks before full service outages occur, and diagnosing underlying root causes. 
+Telecom networks generate large volumes of event tickets, alarm logs, and resource alerts. NOC engineers must triage these quickly, flag high-severity faults before they escalate into outages, and diagnose likely root causes — usually under time pressure with incomplete context.
 
-This project addresses these challenges by developing a dual-model predictive architecture:
-1. **Supervised ML Fault Severity Prediction**: Classifies incoming event tickets into `0 (Low/No Fault)`, `1 (Medium Fault)`, or `2 (Severe Fault)`.
-2. **Unsupervised PyTorch Autoencoder Anomaly Detection**: Learns normal network telemetry patterns from severity `0` records and flags uncharacteristic event/log spikes based on reconstruction error (MSE).
-3. **Combined Operational Risk Score & AI NOC Copilot**: Merges ML classifier risk and Autoencoder anomaly scores into a unified operational risk index, accompanied by XAI signal attribution and Gemini GenAI / Local Deterministic fallback assistance.
+This system closes that loop with three layers:
+
+1. **Supervised Fault Severity Prediction** — a 5-model ensemble (Random Forest, XGBoost, SVM, LSTM, GRU) classifies each ticket as `0` (Low/No Fault), `1` (Medium Fault), or `2` (Severe Fault).
+2. **Unsupervised Anomaly Detection** — a PyTorch autoencoder, trained only on normal (severity-0) tickets, flags telemetry that doesn't reconstruct well — catching patterns the classifier has no labeled examples for.
+3. **Combined Risk Engine + XAI + NOC Copilot** — fuses all signals into one operational risk score, explains *why* via top contributing signals, and generates plain-language root-cause hypotheses and recommendations (Gemini 2.5 Flash, with a fully offline deterministic fallback).
 
 ---
 
-## 📂 Real Dataset Structure & Column Mapping
+## 📂 Dataset: Real Telstra Data, Not Synthetic
 
-The system is configured to directly process the real **Telstra Recruiting Network Dataset** provided in `dataset/dataset/*.zip`:
+Runs entirely on the real Kaggle Telstra competition files (`kaggle competitions download -c telstra-recruiting-network`) — no synthetic data anywhere in the pipeline.
 
-### 1. Dataset Location
-- Uploaded Archive: `dataset/dataset/` containing `train.csv.zip`, `test.csv.zip`, `event_type.csv.zip`, `resource_type.csv.zip`, `severity_type.csv.zip`, `log_feature.csv.zip`.
-- Extracted Data Directory: `data/`
+| File | Rows | Columns | Represents |
+|---|---|---|---|
+| `train.csv` | 7,381 | `id`, `location`, `fault_severity` | Labeled training tickets |
+| `test.csv` | 11,171 | `id`, `location` | Unlabeled tickets |
+| `event_type.csv` | 31,170 | `id`, `event_type` | Alarm/event categories |
+| `resource_type.csv` | 21,076 | `id`, `resource_type` | Device/resource categories |
+| `severity_type.csv` | 18,552 | `id`, `severity_type` | Raw alarm severity level |
+| `log_feature.csv` | 58,671 | `id`, `log_feature`, `volume` | Log feature + volume count |
 
-### 2. Schema Inspection & Column Mappings
-
-| Original CSV File | Rows | Columns | Concept Mapped | Data Type | Key Relationships |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `train.csv` | 7,381 | `id`, `location`, `fault_severity` | Ticket ID, Site Location, Fault Target (`0`, `1`, `2`) | `id`: int64, `location`: str, `fault_severity`: int64 | Primary training set (7,381 unique tickets) |
-| `test.csv` | 11,171 | `id`, `location` | Unlabeled Test Ticket IDs & Site Locations | `id`: int64, `location`: str | Unlabeled test tickets (11,171 unique tickets) |
-| `event_type.csv` | 31,170 | `id`, `event_type` | Event / Alarm Type Categorical Features | `id`: int64, `event_type`: str | One-to-many relationship (crosstab presence count) |
-| `resource_type.csv` | 21,076 | `id`, `resource_type` | Resource / Device Type Categorical Features | `id`: int64, `resource_type`: str | One-to-many relationship (crosstab presence count) |
-| `severity_type.csv` | 18,552 | `id`, `severity_type` | Severity / Alarm Level Categorical Features | `id`: int64, `severity_type`: str | One-to-one relationship (18,552 tickets) |
-| `log_feature.csv` | 58,671 | `id`, `log_feature`, `volume` | Log Features & Numeric Volume Counts | `id`: int64, `log_feature`: str, `volume`: int64 | One-to-many relationship (pivot table with volume sum) |
+**Verified integrity**: 929 unique locations, real class distribution (~65% / 25% / 10% for severity 0/1/2), `sample_submission.csv` present. No target leakage — `id`, raw `location`, and `fault_severity` are excluded from the feature set; only the encoded `location_code` and 454 engineered event/resource/severity/log signals are used (455 features total).
 
 ---
 
 ## 🏗️ System Architecture
 
-```mermaid
-flowchart TD
-    subgraph Data Layer
-        Zips[dataset/dataset/*.zip] --> Unpack[data/generate_dataset.py Unpacker]
-        Unpack --> Raw[data/ CSV Files]
-        Raw --> Preproc[model/train_model.py Feature Engine]
-        Preproc --> Master[data/telecom_failure_master.csv]
-    end
-
-    subgraph ML & Neural Model Core
-        Master --> Classifier[Random Forest Classifier\nfault_severity 0, 1, 2]
-        Master --> Scaler[StandardScaler]
-        Scaler --> Autoencoder[PyTorch Dense Autoencoder\nTrained on Normal Severity 0]
-    end
-
-    subgraph Operational Risk & XAI Engine
-        Classifier --> Fusion[Combined Risk Engine\n0.60 RF Risk + 0.40 AE Anomaly]
-        Autoencoder --> Fusion
-        Classifier --> XAI[XAI Signal Attribution]
-    end
-
-    subgraph Intelligence & Audit Layer
-        Fusion --> AI[Gemini 2.5 Flash / Local Deterministic Fallback]
-        XAI --> AI
-        AI --> DB[(SQLite Database\npredictions & ai_audit_logs)]
-    end
-
-    subgraph NOC Web Dashboard
-        AI --> Tab1[Tab 1: Network Analytics Dashboard]
-        AI --> Tab2[Tab 2: AI Fault & Anomaly Prediction]
-    end
 ```
+Kaggle Telstra archives (dataset/dataset/*.zip)
+  → data/generate_dataset.py (unpacks real data)
+  → model/features.py (feature engineering → 455 columns)
+  → data/telecom_failure_master.csv
+        │
+        ├── model/train_ml.py       → Random Forest, XGBoost, SVM
+        ├── model/train_sequence.py → LSTM, GRU (sequence_models.py)
+        └── model/train_autoencoder.py → PyTorch Autoencoder (normal-only)
+        │
+  → F1-weighted soft-vote ensemble (5 severity models)
+  → Combined Risk Engine (ensemble + anomaly + sequence fusion)
+  → XAI feature attribution (location_code excluded)
+  → Gemini 2.5 Flash / deterministic local fallback (RCA, recommendations, copilot)
+  → SQLite (predictions + ai_audit_logs)
+        │
+  → FastAPI backend (backend/main.py, loaded once at startup)
+  → React + TypeScript frontend (Overview, Analysis, Custom Prediction, Models views)
+```
+
+**Stack**: Python (FastAPI, scikit-learn, XGBoost, PyTorch) · React/TypeScript (Vite, Tailwind, Recharts, Framer Motion) · SQLite · Google Gemini API.
 
 ---
 
-## ⚙️ Setup & Execution Instructions
+## ⚙️ Setup & Execution
 
-### 1. Prerequisites
-- Python 3.10 or higher
-- Git
+### Prerequisites
+- Python 3.10+, Node.js 18+
+- (Optional) Google Gemini API key — app runs fully offline without one
 
-### 2. Install Dependencies
+### Backend
 ```bash
 pip install -r requirements.txt
+cp .env.example .env   # optionally set GEMINI_API_KEY
 ```
 
-### 3. Environment Configuration (Optional Gemini GenAI)
-Copy `.env.example` to `.env`:
+### Build the ML Pipeline
 ```bash
-cp .env.example .env
+python data/generate_dataset.py       # unpack real Kaggle archives
+python model/train_ml.py              # Random Forest, XGBoost, SVM
+python model/train_sequence.py        # LSTM, GRU
+python model/train_autoencoder.py     # Autoencoder (anomaly detection)
+# or run all of the above via: python model/train_all.py
 ```
-Set your Google Gemini API key:
-```env
-GEMINI_API_KEY=your_actual_gemini_api_key_here
-```
-*Note: If no API key is set, the application operates 100% offline using local deterministic rule-based analysis.*
 
-### 4. Step-by-Step Training Commands
-
+### Validate Before Launching
 ```bash
-# 1. Unpack uploaded real dataset files into 'data/'
-python data/generate_dataset.py
-
-# 2. Preprocess real dataset features & train Supervised Random Forest Classifier
-python model/train_model.py
-
-# 3. Train PyTorch Autoencoder Anomaly Detector on real normal tickets
-python model/train_autoencoder.py
+python smoke_test.py
 ```
+Runs the risk engine standalone against known tickets and asserts every output is within valid mathematical range — catches model/engine bugs independent of the web server.
 
-### 5. Launch Application
-Run using PowerShell, Batch scripts, or Streamlit CLI:
+### Run Backend + Frontend
 ```bash
-# Windows PowerShell
-.\run_app.ps1
-
-# Windows Batch
-run_app.bat
-
-# Direct Streamlit Command
-streamlit run app/streamlit_app.py
+python backend/run.py          # or: uvicorn backend.main:app --reload --port 8000
+cd frontend && npm install && npm run dev
 ```
+
+**Note**: models load once at backend startup. After any retrain, fully restart the backend process — a frontend refresh alone will not pick up new model artifacts.
 
 ---
 
-## 🔬 Model Evaluation Metrics (Real Dataset)
+## 🔬 Model Evaluation (Real Dataset, Honest Numbers)
 
-### 1. Supervised Random Forest Classifier
-- **Dataset Evaluated**: 7,381 real Telstra tickets (80% train / 20% stratified test split)
-- **Input Dimensions**: 458 total engineered features
-- **Metrics**:
-  - **Accuracy**: `70.41%`
-  - **Precision (Macro)**: `65.13%`
-  - **Recall (Macro)**: `74.30%`
-  - **F1-Score (Macro)**: `67.45%` (Weighted F1: `72.0%`)
-- **Classification Breakdown**:
-  - `0 (Low Fault)`: Precision `0.91`, Recall `0.68`, F1 `0.78`
-  - `1 (Medium Fault)`: Precision `0.50`, Recall `0.73`, F1 `0.60`
-  - `2 (Severe Fault)`: Precision `0.54`, Recall `0.82`, F1 `0.65`
+All metrics below are read live by the frontend from saved JSON files — nothing is hardcoded in the UI.
 
-### 2. PyTorch Unsupervised Autoencoder Anomaly Detection
-- **Architecture**: `Input (455) -> Dense(227) -> Dense(113) -> Bottleneck(16) -> Dense(113) -> Dense(227) -> Output (455)`
-- **Training Strategy**: Trained exclusively on real normal tickets (`fault_severity == 0`, 4,784 samples).
-- **Anomaly Threshold**: **95th Percentile** normal validation reconstruction MSE (`1.4704`).
-- **Evaluation Metrics** (vs `fault_severity >= 1`):
-  - **ROC-AUC Score**: `0.6241`
-  - **Precision-Recall AUC**: `0.4741`
-  - **Anomalous Rate (MSE > Threshold)**: `5.74%`
+| Model | Accuracy | F1 (macro) |
+|---|---|---|
+| **XGBoost** (primary — best individual model) | **72.71%** | **68.98%** |
+| Random Forest | 69.26% | 65.11% |
+| GRU | 57.82% | 51.32% |
+| SVM | 57.28% | 51.76% |
+| LSTM | 55.72% | 50.66% |
 
-### 3. Combined Risk Score Fusion Formula
-$$\text{Combined Risk} = 0.60 \times P(\text{fault\_severity} \ge 1) + 0.40 \times \min\left(1.0, \frac{\text{MSE}}{\text{Threshold}}\right)$$
+**Autoencoder** (anomaly detection, evaluated separately — not a classifier): ROC-AUC **0.6377** · PR-AUC **0.4768** · threshold (95th percentile of normal validation MSE) **1.3836**
 
-- **Risk Categories**:
-  - 🟢 `LOW`: Normal pattern & low fault risk (< 0.35)
-  - 🟡 `ELEVATED`: Low known fault risk, abnormal telemetry (0.35 - 0.55)
-  - 🟠 `HIGH`: High fault risk profile (> 0.55)
-  - 🔴 `CRITICAL`: High fault risk AND high anomaly score (>= 0.70)
+*These are real, moderate results on a genuinely difficult, well-known Kaggle competition dataset — intentionally not inflated.*
+
+### Ensemble
+All 5 severity models' class probabilities are combined via **F1-weighted soft voting** — each model's contribution weighted by its own macro-F1, so the strongest model (XGBoost) has the most influence without discarding the others.
+
+### Combined Risk Fusion
+```
+Combined Risk = 0.50 × Ensemble Fault Probability [P(severity ≥ 1)]
+              + 0.25 × Autoencoder Anomaly Risk [min(1.0, MSE / threshold)]
+              + 0.25 × Sequence (LSTM/GRU) Fault Probability
+```
+| Risk Category | Condition |
+|---|---|
+| 🟢 LOW | combined_risk < 0.35 |
+| 🟡 ELEVATED | combined_risk ≥ 0.35, or anomaly/early-warning flag |
+| 🟠 HIGH | combined_risk ≥ 0.55, or fault probability ≥ 0.50 |
+| 🔴 CRITICAL | combined_risk ≥ 0.70 |
 
 ---
 
-## ⚠️ Key Assumptions, Limitations & NOC Disclaimers
+## 🖥️ Application Features
 
-> [!WARNING]
-> **Operational Assumptions & Constraints**:
-> 1. **Data Granularity**: The Kaggle Telstra dataset contains event ticket records aggregated by ID, rather than real-time continuous sensor telemetry.
-> 2. **No Time-Series Timestamp**: The base Kaggle dataset lacks timestamped time series metadata. Therefore, the system assesses **fault severity risk and telemetry anomaly status**, but does NOT claim guaranteed future outage forecasting.
-> 3. **Hypothesis vs Diagnosis**: Root-cause diagnostic outputs are probable statistical hypotheses based on observed event/log presence, requiring validation by human NOC engineers.
-> 4. **No Automated Remediation**: Recommendations provide decision support only and do NOT automatically perform physical network remediation.
+- **Overview** — dataset-wide KPIs, live model comparison, severity distribution and location heatmap
+- **Analysis** — per-ticket prediction: severity, confidence, per-model breakdown, anomaly MSE vs threshold, combined risk, XAI top contributing signals
+- **Custom Prediction ("What-If" Simulator)** — manually set signal values (entity type, severity type, event burst, resource count, log volume) and get a live prediction through the exact same models — every field is bounds-validated (Pydantic) before it reaches the model. Explicitly a transparent simulated scenario, not a claim of real historical data.
+- **Models** — full benchmark comparison across all 5 severity models plus the autoencoder
+- **NOC Copilot** — chat interface grounded in real backend data; Gemini-powered with deterministic offline fallback. AI explains and recommends — it never overrides the deterministic ML prediction, risk score, or anomaly status.
+- All AI actions logged to SQLite (`ai_audit_logs`) with a flag for whether Gemini or the fallback was used.
+
+---
+
+## 🩺 Known Fixes & Validation Notes
+
+- **Dynamic metrics** — all evaluation numbers are read live from saved JSON files; sidebar/dashboard/models view always agree.
+- **XAI attribution scaling — resolved** — `location_code` (a `LabelEncoder` output ranging 0–928) previously dominated the attribution chart purely by numeric magnitude versus binary event/resource signals, despite modest actual importance (~6%, not top-1). Now explicitly excluded from the attribution-scoring loop; shown separately as location context.
+- **Stale cached engine after retrain** — the backend loads models once at startup; a full restart (not a frontend refresh) is required after retraining.
+- Run `python smoke_test.py` after any model or code change to catch these classes of bug before a live demo.
+- **XAI method is custom, not SHAP** — attribution score = `feature_value × feature_importance`, ranked. A simpler, legitimate method; explicitly not the SHAP algorithm, despite the module name `xai_explainer.py`.
+
+---
+
+## ⚠️ Assumptions & Limitations
+
+> 1. **Ticket-level, not continuous telemetry** — Telstra data is event-ticket data aggregated by ID, not live streaming sensor data.
+> 2. **No timestamps in the base dataset** — the system assesses *current* fault-severity risk, not a forecasted future outage date. Sequence models use ticket-ID ordering per location as a chronological proxy, mirroring a known technique from top solutions to this competition.
+> 3. **Hypothesis, not diagnosis** — root-cause outputs are statistical hypotheses grounded in observed signals, meant to accelerate a human NOC engineer's triage, not replace it.
+> 4. **No automated remediation** — decision support only; no physical or automated network changes are triggered.
+> 5. **Modest accuracy is intentional and honest** — 72.71% on a genuinely difficult, imbalanced, real-world classification task is a defensible result, not inflated with synthetic data or leakage.
+> 6. **No model versioning yet** — retraining overwrites artifacts in place; a production system would tag and log model versions per prediction.
+
+---
+
+## 🚀 Future Scope
+
+- Graph Neural Network to model fault propagation across connected network locations (current models treat each ticket independently)
+- Real streaming telemetry with timestamps → true time-based forecasting, not just current-risk assessment
+- SHAP integration to upgrade the current simple attribution method
+- Multi-agent GenAI pipeline (dedicated RCA, recommendation, and escalation agents)
+- PostgreSQL + containerized deployment for multi-user production scale
+- On-prem/fine-tuned LLM for data-sensitive production environments
+
+---
+
+## 🗂️ Project Structure
+```
+├── ai/                  # xai_explainer.py (risk engine), gemini_service.py, prompts.py
+├── backend/              # FastAPI app (main.py, run.py)
+├── frontend/              # React + TypeScript (Vite) — Overview, Analysis, Custom Prediction, Models
+├── data/                 # Real Telstra CSVs + dataset unpacker
+├── dataset/dataset/       # Original Kaggle .zip archives
+├── model/                # Training scripts (train_ml.py, train_sequence.py, train_autoencoder.py,
+│                          #   train_all.py), sequence_models.py, autoencoder.py, saved artifacts, metrics JSON
+├── sql/                  # SQLite schema + DB helper (predictions, audit logs)
+├── smoke_test.py          # Standalone risk-engine validation script
+├── requirements.txt
+└── README.md
+```
+
+## 📄 License
+MIT
+
+## 🔗 Links
+- Repository: [github.com/aryandevtyagi10/Telecom-NOC-System](https://github.com/aryandevtyagi10/Telecom-NOC-System)
+- Dataset: [Kaggle — Telstra Recruiting Network Disruptions](https://www.kaggle.com/c/telstra-recruiting-network)
+- 
