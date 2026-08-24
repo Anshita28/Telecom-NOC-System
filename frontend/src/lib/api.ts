@@ -6,6 +6,32 @@
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
+const JWT_STORAGE_KEY = "noc_jwt_token";
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem(JWT_STORAGE_KEY);
+}
+
+export function setAuthToken(token: string): void {
+  localStorage.setItem(JWT_STORAGE_KEY, token);
+}
+
+/**
+ * Wipe the stored JWT and redirect to /login.
+ * Used on 401 (invalid/expired token) and explicit logout.
+ * NOTE: localStorage is used purely for hackathon-timeline simplicity.
+ * For a production system: use httpOnly secure cookies instead.
+ */
+export function clearAuthAndRedirect(): void {
+  localStorage.removeItem(JWT_STORAGE_KEY);
+  const currentPath = window.location.pathname + window.location.search;
+  const isLoginPage = window.location.pathname.startsWith("/login");
+  const loginUrl = isLoginPage
+    ? "/login"
+    : `/login?next=${encodeURIComponent(currentPath)}`;
+  window.location.href = loginUrl;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -220,10 +246,31 @@ export interface ChatResponse {
 // Fetch helpers
 // ---------------------------------------------------------------------------
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  // Attach Bearer JWT if one is stored (works for all endpoints; public
+  // endpoints /api/health and /api/auth/login simply ignore the header)
+  const token = getAuthToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
+    headers,
   });
+
+  // If ANY protected call returns 401: token is missing/expired/forged.
+  // Clear it immediately and route back to login rather than showing a broken
+  // dashboard with cascading errors.
+  if (res.status === 401) {
+    clearAuthAndRedirect();
+    const body = await res.text().catch(() => "");
+    throw new Error(`Authentication required (${body || res.status}).`);
+  }
+
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`API ${res.status}: ${body}`);
@@ -322,4 +369,34 @@ export async function requestCopilotChat(
     method: "POST",
     body: JSON.stringify({ ticket_summary: ticketSummary, message, history, api_key: apiKey }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Authentication helpers
+// ---------------------------------------------------------------------------
+export interface AuthLoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface AuthLoginResponse {
+  access_token: string;
+  token_type: "bearer";
+}
+
+export interface AuthMeResponse {
+  username: string;
+}
+
+export async function loginAuth(
+  req: AuthLoginRequest,
+): Promise<AuthLoginResponse> {
+  return apiFetch<AuthLoginResponse>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export async function fetchAuthMe(): Promise<AuthMeResponse> {
+  return apiFetch<AuthMeResponse>("/api/auth/me");
 }

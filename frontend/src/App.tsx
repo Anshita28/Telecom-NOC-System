@@ -3,12 +3,20 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import LandingPage from "@/pages/LandingPage";
 import DashboardPage from "@/pages/DashboardPage";
+import LoginPage from "@/pages/LoginPage";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
       refetchOnWindowFocus: false,
+      // Don't cache 401-retry infinitely during auth failures (we redirect on 401)
+      retry: (failureCount, error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes("Authentication required")) return false;
+        return failureCount < 2;
+      },
     },
   },
 });
@@ -19,7 +27,15 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/dashboard/*" element={<DashboardPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/dashboard/*"
+            element={
+              <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+            }
+          />
           <Route
             path="*"
             element={

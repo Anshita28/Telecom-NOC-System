@@ -10,7 +10,7 @@ import logging
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,12 @@ from sql.db import (
     log_ai_action,
     get_prediction_history,
     get_ai_audit_logs,
+)
+from backend.auth import (
+    Token,
+    authenticate_user,
+    create_access_token,
+    get_current_user,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -91,14 +97,28 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ---------------------------------------------------------------------------
+# CORS origins — combine localhost defaults (local dev) with any explicitly
+# configured FRONTEND_URL (can be a comma-separated list for multiple envs)
+# e.g. FRONTEND_URL="https://noc-demo.vercel.app,https://staging.example.com"
+# ---------------------------------------------------------------------------
+_DEFAULT_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+_FRONTEND_ENV = os.getenv("FRONTEND_URL", "") or ""
+_EXTRA_ORIGINS = [
+    o.strip()
+    for o in _FRONTEND_ENV.split(",")
+    if o.strip()
+]
+ALLOWED_ORIGINS = list({*_DEFAULT_ORIGINS, *_EXTRA_ORIGINS})
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -165,8 +185,13 @@ class CustomPredictionRequest(BaseModel):
     log_volume: int = Field(default=100, ge=1, le=20_000)
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
 # ---------------------------------------------------------------------------
-# Health check
+# Health check (public — no auth required)
 # ---------------------------------------------------------------------------
 @app.get("/api/health")
 async def health_check():
@@ -178,10 +203,31 @@ async def health_check():
 
 
 # ---------------------------------------------------------------------------
-# Ticket listing
+# Authentication (public — no auth required)
+# ---------------------------------------------------------------------------
+@app.post("/api/auth/login", response_model=Token)
+async def login_for_access_token(req: LoginRequest):
+    if not authenticate_user(req.username, req.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(data={"sub": req.username})
+    return Token(access_token=access_token, token_type="bearer")
+
+
+@app.get("/api/auth/me")
+async def auth_me(current_user: str = Depends(get_current_user)):
+    """Verify the token on page load / refresh."""
+    return {"username": current_user}
+
+
+# ---------------------------------------------------------------------------
+# Ticket listing (protected)
 # ---------------------------------------------------------------------------
 @app.get("/api/tickets")
-async def get_tickets():
+async def get_tickets(current_user: str = Depends(get_current_user)):
     if not risk_engine:
         raise HTTPException(status_code=503, detail="Engine not loaded yet.")
     return {"tickets": risk_engine.get_all_ticket_ids()}
@@ -191,7 +237,7 @@ async def get_tickets():
 # Analytics endpoints
 # ---------------------------------------------------------------------------
 @app.get("/api/analytics/overview")
-async def analytics_overview():
+async def analytics_overview(current_user: str = Depends(get_current_user)):
     if not risk_engine:
         raise HTTPException(status_code=503, detail="Engine not loaded yet.")
     master_df = risk_engine.master_df
@@ -214,7 +260,7 @@ async def analytics_overview():
 
 
 @app.get("/api/analytics/models")
-async def analytics_models():
+async def analytics_models(current_user: str = Depends(get_current_user)):
     if not risk_engine:
         raise HTTPException(status_code=503, detail="Engine not loaded yet.")
     return {
@@ -227,7 +273,7 @@ async def analytics_models():
 
 
 @app.get("/api/analytics/severity-distribution")
-async def severity_distribution():
+async def severity_distribution(current_user: str = Depends(get_current_user)):
     if not risk_engine:
         raise HTTPException(status_code=503, detail="Engine not loaded yet.")
     master_df = risk_engine.master_df
@@ -242,7 +288,7 @@ async def severity_distribution():
 
 
 @app.get("/api/analytics/top-locations")
-async def top_locations(limit: int = Query(default=10, ge=1, le=100)):
+async def top_locations(limit: int = Query(default=10, ge=1, le=100), current_user: str = Depends(get_current_user)):
     if not risk_engine:
         raise HTTPException(status_code=503, detail="Engine not loaded yet.")
     master_df = risk_engine.master_df
@@ -252,7 +298,7 @@ async def top_locations(limit: int = Query(default=10, ge=1, le=100)):
 
 
 @app.get("/api/analytics/severity-location-heatmap")
-async def severity_location_heatmap():
+async def severity_location_heatmap(current_user: str = Depends(get_current_user)):
     if not risk_engine:
         raise HTTPException(status_code=503, detail="Engine not loaded yet.")
     master_df = risk_engine.master_df
@@ -266,7 +312,7 @@ async def severity_location_heatmap():
 # History / audit
 # ---------------------------------------------------------------------------
 @app.get("/api/history/predictions")
-async def history_predictions(limit: int = Query(default=50, ge=1, le=500)):
+async def history_predictions(limit: int = Query(default=50, ge=1, le=500), current_user: str = Depends(get_current_user)):
     df = get_prediction_history(limit=limit)
     if df.empty:
         return {"predictions": []}
@@ -275,7 +321,7 @@ async def history_predictions(limit: int = Query(default=50, ge=1, le=500)):
 
 
 @app.get("/api/history/audit-logs")
-async def history_audit_logs(limit: int = Query(default=50, ge=1, le=500)):
+async def history_audit_logs(limit: int = Query(default=50, ge=1, le=500), current_user: str = Depends(get_current_user)):
     df = get_ai_audit_logs(limit=limit)
     if df.empty:
         return {"audit_logs": []}
@@ -287,7 +333,7 @@ async def history_audit_logs(limit: int = Query(default=50, ge=1, le=500)):
 # Analyze ticket
 # ---------------------------------------------------------------------------
 @app.post("/api/analyze/{ticket_id}")
-async def analyze_ticket(ticket_id: int):
+async def analyze_ticket(ticket_id: int, current_user: str = Depends(get_current_user)):
     if not risk_engine:
         raise HTTPException(status_code=503, detail="Engine not loaded yet.")
     try:
@@ -314,7 +360,7 @@ async def analyze_ticket(ticket_id: int):
 
 
 @app.post("/api/custom-prediction")
-async def analyze_custom_ticket(req: CustomPredictionRequest):
+async def analyze_custom_ticket(req: CustomPredictionRequest, current_user: str = Depends(get_current_user)):
     if not risk_engine:
         raise HTTPException(status_code=503, detail="Engine not loaded yet.")
     summary = risk_engine.analyze_custom_ticket(**req.model_dump())
@@ -332,7 +378,7 @@ async def analyze_custom_ticket(req: CustomPredictionRequest):
 # AI actions
 # ---------------------------------------------------------------------------
 @app.post("/api/ai/root-cause")
-async def ai_root_cause(req: AIRootCauseRequest):
+async def ai_root_cause(req: AIRootCauseRequest, current_user: str = Depends(get_current_user)):
     result, is_gemini = generate_root_cause_analysis(
         req.ticket_summary, custom_api_key=req.api_key
     )
@@ -347,7 +393,7 @@ async def ai_root_cause(req: AIRootCauseRequest):
 
 
 @app.post("/api/ai/recommendations")
-async def ai_recommendations(req: AIRecommendationsRequest):
+async def ai_recommendations(req: AIRecommendationsRequest, current_user: str = Depends(get_current_user)):
     result, is_gemini = generate_maintenance_recommendations(
         req.ticket_summary, custom_api_key=req.api_key
     )
@@ -362,7 +408,7 @@ async def ai_recommendations(req: AIRecommendationsRequest):
 
 
 @app.post("/api/ai/incident-summary")
-async def ai_incident_summary(req: AIIncidentSummaryRequest):
+async def ai_incident_summary(req: AIIncidentSummaryRequest, current_user: str = Depends(get_current_user)):
     result, is_gemini = generate_incident_summary(
         req.ticket_summary, custom_api_key=req.api_key
     )
@@ -377,7 +423,7 @@ async def ai_incident_summary(req: AIIncidentSummaryRequest):
 
 
 @app.post("/api/ai/chat")
-async def ai_chat(req: AIChatRequest):
+async def ai_chat(req: AIChatRequest, current_user: str = Depends(get_current_user)):
     answer, is_gemini = answer_copilot_chat(
         req.ticket_summary, req.message, req.history, custom_api_key=req.api_key
     )
@@ -389,3 +435,17 @@ async def ai_chat(req: AIChatRequest):
         is_gemini=is_gemini,
     )
     return {"answer": answer, "is_gemini": is_gemini}
+
+
+# ---------------------------------------------------------------------------
+# Convenience entry point — respects the PORT env var injected by Render/
+# Railway. Usage: `python backend/main.py` (or `python -m backend.run`).
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    PORT = int(os.getenv("PORT", "8000"))
+    uvicorn.run(
+        "backend.main:app",
+        host="0.0.0.0",
+        port=PORT,
+    )

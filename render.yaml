@@ -1,0 +1,67 @@
+# Render blueprint for the Telecom NOC AI backend.
+# Paste this file into Render's "YAML" upload flow, OR just create a new
+# Web Service manually pointing at this repo and copy the values below.
+#
+# After you deploy the frontend to Vercel:
+#   1. Copy the live frontend URL (e.g. https://noc-demo.vercel.app)
+#   2. Set it as the FRONTEND_URL env var on Render so CORS allows it
+services:
+  - type: web
+    name: telecom-noc-ai-backend
+    runtime: python
+    region: oregon  # or frankfurt/singapore — pick closest to you
+    plan: free      # or starter; free tier spins down with inactivity (ok for demo)
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+    # Python build installs root-level requirements.txt by default — that's
+    # exactly what we want (pandas / torch / xgboost / python-jose / fastapi)
+    autoDeploy: yes
+    envVars:
+      # ------------------------------------------------------------------
+      # REQUIRED — set real values in the Render dashboard after creating
+      # the service. Never commit the real ones.
+      # ------------------------------------------------------------------
+      - key: DEMO_USERNAME
+        sync: false  # secret
+      - key: DEMO_PASSWORD
+        sync: false  # secret
+      - key: JWT_SECRET_KEY
+        sync: false  # secret — use `openssl rand -hex 32` to generate
+
+      # Optional — defaults of 8 are fine
+      - key: ACCESS_TOKEN_EXPIRE_HOURS
+        value: "8"
+
+      # Optional — comma-separated list of live frontend origins after Vercel deploy
+      # Example: "https://noc-demo.vercel.app"
+      - key: FRONTEND_URL
+        value: ""
+
+      # Optional — set only if you want to use Gemini on the deployed backend.
+      # If blank the system still works via deterministic local fallback.
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # NOTE: PORT is auto-injected by Render — no need to set it.
+
+# **********************************************************************
+# IMPORTANT DEPLOY NOTE 1 — PyTorch wheel size:
+# torch>=2.0.0 is a ~800 MB install. On Render's FREE plan the build
+# environment has LIMITED disk space and the install MAY fail.
+# Workarounds if that happens (pick ONE):
+#   a) Upgrade to the $7 "Starter" plan temporarily for the hackathon
+#      (has more build disk and no 15-min spin-down)
+#   b) Swap to the CPU-only smaller torch wheel: change requirements.txt
+#      line for torch to:
+#         --index-url https://download.pytorch.org/whl/cpu
+#         torch>=2.0.0
+#      (CPU inference is fine for 7k tickets — we're doing one inference at a
+#      time, not training). You can add a separate requirements section in
+#      render.yaml if needed.
+#
+# IMPORTANT DEPLOY NOTE 2 — SQLite persistence (already documented in sql/db.py):
+# The Render free-tier filesystem is EPHEMERAL — every redeploy wipes
+# sql/telecom_noc.db. For demo this is FINE: predictions + AI audit logs
+# will just start fresh from empty each time you deploy/restart, and
+# telecom_data is auto-reseeded from the CSV every startup.
+# **********************************************************************

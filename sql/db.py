@@ -11,6 +11,17 @@ import pandas as pd
 DB_PATH = os.path.join(os.path.dirname(__file__), "telecom_noc.db")
 SQL_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "database.sql")
 
+# IMPORTANT — Deployment Caveat (ephemeral free-tier filesystems):
+# Most free hosting platforms (Render, Railway free tier, Heroku, Netlify
+# functions, Vercel serverless) have EPHEMERAL disks that are WIPED on every
+# redeploy / container restart. That means:
+#   - The predictions / ai_audit_logs tables will start empty on every new spin-up
+#   - telecom_data will be re-seeded from telecom_failure_master.csv each time
+# For tomorrow's hackathon demo this is 100% acceptable (no need for
+# historical audit persistence across restarts). Long-term production fix:
+# migrate audit logging to a managed Postgres/Turso/Neon/Supabase DB, or mount
+# a persistent disk volume for this .sqlite file.
+
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 

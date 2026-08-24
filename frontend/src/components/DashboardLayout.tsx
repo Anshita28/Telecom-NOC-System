@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import {
   LayoutDashboard,
   Search,
@@ -10,9 +11,11 @@ import {
   X,
   Cpu,
   Crosshair,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { clearAuthAndRedirect } from "@/lib/api";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -28,8 +31,15 @@ const navItems = [
 
 export default function DashboardLayout({ children, settingsSlot }: DashboardLayoutProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const handleLogout = () => {
+    clearAuthAndRedirect();
+    toast.success("Signed out successfully.");
+    navigate("/login", { replace: true });
+  };
 
   return (
     <div className="flex min-h-screen bg-noc-bg">
@@ -89,8 +99,8 @@ export default function DashboardLayout({ children, settingsSlot }: DashboardLay
           })}
         </nav>
 
-        {/* Settings button */}
-        <div className="border-t border-noc-border p-2">
+        {/* Bottom action buttons */}
+        <div className="border-t border-noc-border p-2 space-y-1">
           <Button
             variant="ghost"
             className="w-full justify-start gap-3 text-noc-text-muted"
@@ -98,6 +108,14 @@ export default function DashboardLayout({ children, settingsSlot }: DashboardLay
           >
             <Settings className="h-4 w-4 shrink-0" />
             {sidebarOpen && <span>Settings</span>}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={handleLogout}
+            className="w-full justify-start gap-3 text-noc-text-muted hover:text-red-400 hover:bg-red-500/10"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            {sidebarOpen && <span>Sign Out</span>}
           </Button>
         </div>
       </motion.aside>
