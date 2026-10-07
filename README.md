@@ -22,7 +22,7 @@ This system closes that loop with three layers:
 
 1. **Supervised Fault Severity Prediction** — a 5-model ensemble (Random Forest, XGBoost, SVM, LSTM, GRU) classifies each ticket as `0` (Low/No Fault), `1` (Medium Fault), or `2` (Severe Fault).
 2. **Unsupervised Anomaly Detection** — a PyTorch autoencoder, trained only on normal (severity-0) tickets, flags telemetry that doesn't reconstruct well — catching patterns the classifier has no labeled examples for.
-3. **Combined Risk Engine + XAI + NOC Copilot** — fuses all signals into one operational risk score, explains *why* via top contributing signals, and generates plain-language root-cause hypotheses and recommendations (Gemini 2.5 Flash, with a fully offline deterministic fallback).
+3. **Combined Risk Engine + XAI + NOC Copilot** — fuses all signals into one operational risk score, explains *why* via top contributing signals, and generates plain-language root-cause hypotheses and recommendations (Gemini 3.5 Flash, with a fully offline deterministic fallback).
 
 ---
 
@@ -58,7 +58,7 @@ Kaggle Telstra archives (dataset/dataset/*.zip)
   → F1-weighted soft-vote ensemble (5 severity models)
   → Combined Risk Engine (ensemble + anomaly + sequence fusion)
   → XAI feature attribution (location_code excluded)
-  → Gemini 2.5 Flash / deterministic local fallback (RCA, recommendations, copilot)
+  → Gemini 3.5 Flash / deterministic local fallback (RCA, recommendations, copilot)
   → SQLite (predictions + ai_audit_logs)
         │
   → FastAPI backend (backend/main.py, loaded once at startup)

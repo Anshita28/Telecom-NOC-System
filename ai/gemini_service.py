@@ -80,7 +80,7 @@ def generate_root_cause_analysis(summary: dict, custom_api_key=None) -> tuple[di
         try:
             prompt = build_root_cause_prompt(summary)
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=f"{SYSTEM_NOC_PROMPT}\n\n{prompt}"
             )
             text = response.text
@@ -89,7 +89,7 @@ def generate_root_cause_analysis(summary: dict, custom_api_key=None) -> tuple[di
             result = {
                 "executive_assessment": f"Gemini GenAI Analysis for Ticket #{summary.get('ticket_id')}",
                 "probable_root_cause_hypothesis": text,
-                "confidence_estimate": "High (Gemini 2.5 Flash)",
+                "confidence_estimate": "High (Gemini 3.5 Flash)",
                 "observed_telemetry_evidence": [f"Events: {', '.join(summary.get('active_events', []))}", f"Resources: {', '.join(summary.get('active_resources', []))}"],
                 "model_derived_evidence": [f"Predicted Severity: {summary.get('predicted_severity_label')}", f"Combined Risk: {summary.get('combined_risk'):.1%}"],
                 "uncertainty_statement": "AI-generated analysis. Verify with local network telemetry prior to field dispatch."
@@ -177,7 +177,7 @@ def generate_maintenance_recommendations(summary: dict, custom_api_key=None) -> 
         try:
             prompt = build_recommendations_prompt(summary)
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=f"{SYSTEM_NOC_PROMPT}\n\n{prompt}"
             )
             text = response.text
@@ -200,7 +200,7 @@ def generate_incident_summary(summary: dict, custom_api_key=None) -> tuple[dict,
         try:
             prompt = f"Provide a bulleted NOC Executive Briefing for Ticket #{summary.get('ticket_id')} at {summary.get('location')} with Risk {summary.get('risk_category')} ({summary.get('combined_risk'):.1%})."
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=f"{SYSTEM_NOC_PROMPT}\n\n{prompt}"
             )
             return {"summary": response.text, "is_gemini": True}, True
@@ -224,7 +224,7 @@ def answer_copilot_chat(summary: dict, question: str, chat_history: list, custom
         try:
             prompt = build_copilot_chat_prompt(summary, question, chat_history)
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 contents=prompt
             )
             return response.text, True

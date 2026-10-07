@@ -36,14 +36,39 @@ Active Resource Types: {', '.join(ticket_summary.get('active_resources', ['None'
 Active Severity Types: {', '.join(ticket_summary.get('active_severities', ['None']))}
 Top High-Volume Log Features: {', '.join([f"{k} (vol={v})" for k, v in ticket_summary.get('active_logs', {}).items()])}
 
---- REQUIRED OUTPUT FIELDS ---
-Provide a clear analysis with:
-1. Executive Assessment
-2. Probable Root-Cause Hypothesis
-3. Confidence Estimate (High/Medium/Low)
-4. Observed Telemetry Evidence (bullet points)
-5. Model-Derived Evidence (bullet points)
-6. Uncertainty Statement
+--- REQUIRED OUTPUT FORMAT ---
+Return a polished, executive-style brief with clean plain-text section titles and concise bullet lists.
+Use this exact high-level structure, but do not include markdown heading markers like "##" or "#" in front of section titles.
+
+Executive Assessment
+<2-4 sentences summarizing the ticket status in plain business language.
+
+Probable Root-Cause Hypothesis
+<3-5 concise sentences with the probable cause clearly labeled as a hypothesis and tied to ticket evidence.
+
+Confidence Estimate
+<one sentence: High / Medium / Low, plus a brief reason.
+
+Observed Telemetry Evidence
+- bullet 1
+- bullet 2
+- bullet 3
+
+Model-Derived Evidence
+- bullet 1
+- bullet 2
+- bullet 3
+
+Uncertainty Statement
+<1 paragraph explaining the limitations of using ticket-level telemetry without live field validation.
+
+Constraints:
+- Do not output a dense paragraph wall.
+- Keep each section readable and scannable.
+- Use bold emphasis only for key terms and values.
+- No markdown heading syntax, hashtags, or decorative filler.
+- Explain causality only as a hypothesis, not as fact.
+- Write in polished, executive business language.
 """
 
 def build_recommendations_prompt(ticket_summary: dict) -> str:
@@ -64,6 +89,12 @@ Generate structured recommendations covering:
 2. Diagnostic Checks for Field/NOC Engineers
 3. Maintenance & Protocols (Physical/Logical)
 4. Telemetry Monitoring Recommendations
+
+Important formatting rules:
+- Keep each section to 3 short bullet points maximum.
+- Do not write long dense paragraphs inside list items.
+- Prefer concise, scannable statements with action verbs.
+- Use clean plain-language prose, not noisy markdown or hashtags.
 """
 
 def build_copilot_chat_prompt(ticket_summary: dict, user_question: str, chat_history: list) -> str:

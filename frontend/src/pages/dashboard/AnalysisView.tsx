@@ -561,7 +561,7 @@ export default function AnalysisView({ apiKey }: Props) {
                   <CardContent className="p-6">
                     {aiOutput.isGemini && (
                       <span className="mb-3 inline-flex items-center gap-1 rounded-full bg-risk-low/10 px-2.5 py-0.5 text-xs font-medium text-risk-low">
-                        ✅ Gemini 2.5 Flash
+                        ✅ Gemini 3.5 Flash
                       </span>
                     )}
 
@@ -654,15 +654,91 @@ export default function AnalysisView({ apiKey }: Props) {
 
 // ----- AI Output Sub-components -----
 
+function formatInlineText(value: string) {
+  const tokens = value.split(/(\*\*.*?\*\*|\*.*?\*|_[^_]+_)/g).filter(Boolean);
+
+  return tokens.map((token, idx) => {
+    if (/^\*\*.*\*\*$/.test(token)) {
+      return <strong key={idx} className="font-semibold text-noc-text">{token.replace(/^\*\*|\*\*$/g, "")}</strong>;
+    }
+    if (/^\*.*\*$/.test(token)) {
+      return <em key={idx} className="italic text-noc-text-muted">{token.replace(/^\*|\*$/g, "")}</em>;
+    }
+    if (/^_.+_$/.test(token)) {
+      return <span key={idx} className="font-medium text-noc-accent">{token.replace(/^_|_$/g, "")}</span>;
+    }
+    return <span key={idx}>{token}</span>;
+  });
+}
+
+function StructuredTextBlock({ text }: { text: string }) {
+  const blocks = text
+    .split(/\n\s*\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="space-y-4">
+      {blocks.map((block, blockIndex) => {
+        const lines = block
+          .split(/\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        const cleanedTitle = lines[0]?.replace(/^#+\s*/, "") ?? "";
+        const looksLikePlainTitle =
+          lines.length === 1 &&
+          cleanedTitle.length > 0 &&
+          cleanedTitle.length < 80 &&
+          !/[.!?]$/.test(cleanedTitle) &&
+          !/^[-*\d]/.test(cleanedTitle);
+
+        if (looksLikePlainTitle || (lines.length === 1 && /^#+\s+/.test(lines[0]))) {
+          return (
+            <div key={blockIndex} className="pb-1 pt-2">
+              <div className="inline-flex rounded-full border border-noc-accent/30 bg-noc-accent/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-noc-accent">
+                {formatInlineText(cleanedTitle || lines[0].replace(/^#+\s+/, ""))}
+              </div>
+            </div>
+          );
+        }
+
+        if (lines.every((line) => /^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line))) {
+          return (
+            <ul key={blockIndex} className="space-y-2 text-sm leading-7 text-noc-text-muted">
+              {lines.map((line, lineIndex) => (
+                <li key={lineIndex} className="flex gap-3 rounded-lg border border-noc-border/60 bg-noc-bg/30 px-3 py-2">
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-noc-accent" />
+                  <span className="flex-1">{formatInlineText(line.replace(/^[-*]\s+|^\d+\.\s+/, ""))}</span>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+
+        return (
+          <div key={blockIndex} className="space-y-2 text-sm leading-7 text-noc-text-muted">
+            {lines.map((line, lineIndex) => (
+              <p key={lineIndex} className="rounded-lg border border-transparent bg-noc-bg/10 px-2 py-1.5">
+                {formatInlineText(line)}
+              </p>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SectionList({ title, items }: { title: string; items: string[] }) {
   return (
-    <div>
-      <p className="mb-1 text-sm font-semibold text-noc-text">{title}</p>
-      <ul className="space-y-1 text-sm text-noc-text-muted">
+    <div className="rounded-xl border border-noc-border/70 bg-gradient-to-br from-noc-bg/70 to-noc-surface/60 p-3.5 shadow-[0_10px_20px_rgba(7,15,17,0.12)]">
+      <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-noc-text-muted">{title}</p>
+      <ul className="space-y-2 text-sm text-noc-text-muted">
         {items.map((item, i) => (
-          <li key={i} className="flex gap-2">
-            <span className="text-noc-accent">•</span>
-            {item}
+          <li key={i} className="flex gap-2.5 rounded-lg border border-noc-border/50 bg-noc-bg/25 px-2.5 py-2.5 leading-6">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-noc-accent" />
+            <span className="flex-1 text-[13px] leading-6">{formatInlineText(item)}</span>
           </li>
         ))}
       </ul>
@@ -672,48 +748,68 @@ function SectionList({ title, items }: { title: string; items: string[] }) {
 
 function RootCauseOutput({ data }: { data: any }) {
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-bold">🔍 Root-Cause Analysis</h3>
-      <div>
-        <p className="text-sm font-medium text-noc-text-muted">Executive Assessment</p>
-        <p className="mt-0.5 text-sm">{data.executive_assessment}</p>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-xl font-bold text-noc-text">🔍 Root-Cause Analysis</h3>
+        <span className="rounded-full border border-noc-accent/30 bg-noc-accent/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-noc-accent">
+          {data.confidence_estimate}
+        </span>
       </div>
-      <div className="rounded-lg border border-noc-accent/20 bg-noc-accent/5 p-3">
-        <p className="text-sm font-medium text-noc-accent">Probable Hypothesis</p>
-        <p className="mt-0.5 text-sm">{data.probable_root_cause_hypothesis}</p>
+
+      <div className="rounded-2xl border border-noc-border/80 bg-gradient-to-br from-noc-bg/70 via-noc-surface/60 to-transparent p-4 shadow-[0_12px_30px_rgba(17,24,39,0.16)]">
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-noc-text-muted">Executive Assessment</p>
+        <p className="text-sm leading-7 text-noc-text">{data.executive_assessment}</p>
       </div>
-      <div className="font-[family-name:var(--font-mono)] text-xs text-noc-text-muted">
-        Confidence: {data.confidence_estimate}
+
+      <div className="rounded-2xl border border-noc-accent/30 bg-[radial-gradient(circle_at_top_left,_rgba(75,230,146,0.14),_transparent_40%),linear-gradient(135deg,rgba(24,55,48,0.95),rgba(10,16,18,0.92))] p-4 shadow-[0_16px_35px_rgba(24,126,109,0.14)]">
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-noc-accent">Probable Hypothesis</p>
+        <StructuredTextBlock text={data.probable_root_cause_hypothesis} />
       </div>
-      <SectionList title="Observed Telemetry Evidence" items={data.observed_telemetry_evidence} />
-      <SectionList title="Model-Derived Evidence" items={data.model_derived_evidence} />
-      <p className="text-xs text-noc-text-dim italic">⚠️ {data.uncertainty_statement}</p>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <SectionList title="Observed Telemetry Evidence" items={data.observed_telemetry_evidence} />
+        <SectionList title="Model-Derived Evidence" items={data.model_derived_evidence} />
+      </div>
+
+      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-300">Uncertainty Note</p>
+        <p className="mt-2 text-sm leading-6 text-noc-text-muted">⚠️ {data.uncertainty_statement}</p>
+      </div>
     </div>
   );
 }
 
 function RecommendationsOutput({ data }: { data: any }) {
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-bold">🛠️ Preventive Maintenance Recommendations</h3>
-      <div className="flex gap-4 text-sm">
-        <span className="font-[family-name:var(--font-mono)]">{data.priority_level}</span>
-        <span className="text-noc-text-muted">{data.urgency_category}</span>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-xl font-bold text-noc-text">🛠️ Preventive Maintenance</h3>
+        <span className="rounded-full border border-risk-high/30 bg-risk-high/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-risk-high">
+          {data.priority_level}
+        </span>
       </div>
-      <SectionList title="Diagnostic Checks" items={data.diagnostic_checks} />
-      <SectionList title="Maintenance Actions" items={data.maintenance_actions} />
-      <SectionList title="Monitoring Guidance" items={data.monitoring_recommendations} />
+
+      <div className="rounded-2xl border border-noc-border/80 bg-gradient-to-br from-noc-bg/70 to-noc-surface/60 p-4 shadow-[0_12px_30px_rgba(7,15,17,0.18)]">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-noc-text-muted">Urgency</p>
+        <p className="mt-2 text-sm leading-6 text-noc-text">{data.urgency_category}</p>
+      </div>
+
+      <div className="space-y-3">
+        <SectionList title="Diagnostic Checks" items={data.diagnostic_checks} />
+        <SectionList title="Maintenance Actions" items={data.maintenance_actions} />
+        <SectionList title="Monitoring Guidance" items={data.monitoring_recommendations} />
+      </div>
     </div>
   );
 }
 
 function IncidentSummaryOutput({ data }: { data: any }) {
   return (
-    <div className="space-y-2">
-      <h3 className="text-lg font-bold">📋 Incident Executive Briefing</h3>
-      <pre className="whitespace-pre-wrap rounded-lg bg-noc-bg p-4 font-[family-name:var(--font-mono)] text-sm text-noc-text">
-        {data.summary}
-      </pre>
+    <div className="space-y-4">
+      <h3 className="text-xl font-bold text-noc-text">📋 Incident Executive Briefing</h3>
+      <div className="rounded-2xl border border-noc-border/80 bg-gradient-to-br from-noc-bg/70 to-noc-surface/60 p-4 shadow-[0_12px_30px_rgba(7,15,17,0.18)]">
+        <StructuredTextBlock text={data.summary} />
+      </div>
     </div>
   );
 }

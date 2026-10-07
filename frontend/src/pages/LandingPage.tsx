@@ -122,7 +122,7 @@ const features = [
   { icon: Zap, title: "Autoencoder Anomaly Detection", desc: "PyTorch dense autoencoder identifying network anomalies via reconstruction error analysis." },
   { icon: Shield, title: "Combined Risk Scoring", desc: "Weighted fusion of classifier confidence and anomaly score into a unified 0–1 risk metric." },
   { icon: Brain, title: "XAI Signal Attribution", desc: "Top feature contributions using weighted importance — every prediction is explainable." },
-  { icon: AlertTriangle, title: "AI Root-Cause Hypotheses", desc: "Evidence-grounded root-cause analysis using Gemini 2.5 Flash or deterministic fallback." },
+  { icon: AlertTriangle, title: "AI Root-Cause Hypotheses", desc: "Evidence-grounded root-cause analysis using Gemini 3.5 Flash or deterministic fallback." },
   { icon: Activity, title: "Preventive Maintenance", desc: "AI-generated diagnostic checks, maintenance protocols, and monitoring recommendations." },
   { icon: MessageSquare, title: "AI NOC Copilot Chat", desc: "Conversational copilot scoped to each ticket — ask questions about risk math, signals, and actions." },
   { icon: History, title: "Full Audit Trail", desc: "Every prediction and AI action logged to SQLite with timestamps, severity, and Gemini/local indicator." },
